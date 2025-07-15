@@ -1,9 +1,13 @@
 import { randomBytes } from 'crypto';
-import { ed25519 } from '@noble/ed25519';
-import { secp256k1 } from '@noble/secp256k1';
-import { sha224 } from '@noble/hashes/sha224';
+import * as ed25519 from '@noble/ed25519';
+import * as secp256k1 from '@noble/secp256k1';
+import { sha224 } from '@noble/hashes/sha2';
+import { sha512 } from '@noble/hashes/sha512';
 import { crc32 } from 'crc';
 import * as bip39 from 'bip39';
+
+// Setup SHA-512 for ed25519
+ed25519.etc.sha512Sync = (...m) => sha512(ed25519.etc.concatBytes(...m));
 
 class ICPWalletGenerator {
     constructor() {
@@ -258,23 +262,10 @@ async function main() {
     console.log('Internet Computer Protocol Wallet Generation Tool\n');
 
     try {
-        // Generate Ed25519 wallet with random seed
-        console.log('Generating Ed25519 wallet...');
-        const wallet1 = await generator.generateWallet({ keyType: 'Ed25519' });
-        generator.displayWallet(wallet1);
-
-        // Generate Secp256k1 wallet with mnemonic
-        console.log('\nGenerating Secp256k1 wallet with mnemonic...');
-        const wallet2 = await generator.generateWallet({ 
-            keyType: 'Secp256k1', 
-            seedMethod: 'mnemonic' 
-        });
-        generator.displayWallet(wallet2);
-
-        // Generate 3 more wallets
-        console.log('\nGenerating 3 additional wallets...');
-        const additionalWallets = await generator.generateMultipleWallets(3, { keyType: 'Ed25519' });
-        additionalWallets.forEach(wallet => generator.displayWallet(wallet));
+        // Generate one Ed25519 wallet with random seed
+        console.log('Generating ICP wallet...');
+        const wallet = await generator.generateWallet({ keyType: 'Ed25519' });
+        generator.displayWallet(wallet);
 
         // Show statistics
         console.log('\nStatistics:');
@@ -290,7 +281,5 @@ async function main() {
 // Export for module use
 export { ICPWalletGenerator };
 
-// Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-    main().catch(console.error);
-} 
+// Run the main function
+main().catch(console.error); 
