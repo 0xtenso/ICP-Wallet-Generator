@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import * as ed25519 from '@noble/ed25519';
 import * as secp256k1 from '@noble/secp256k1';
-import { sha224 } from '@noble/hashes/sha2';
+import { sha224, sha256 } from '@noble/hashes/sha2';
 import { sha512 } from '@noble/hashes/sha512';
 import { crc32 } from 'crc';
 import * as bip39 from 'bip39';
@@ -17,7 +17,7 @@ class ICPWalletGenerator {
 
     // Generate secure random seed
     generateRandomSeed(length = 32) {
-        return randomBytes(length);
+        return new Uint8Array(randomBytes(length));
     }
 
     // Generate mnemonic and derive seed
@@ -28,17 +28,34 @@ class ICPWalletGenerator {
         if (!bip39.validateMnemonic(mnemonic)) {
             throw new Error('Invalid mnemonic phrase');
         }
-        const seed = bip39.mnemonicToSeedSync(mnemonic);
-        return { mnemonic, seed: new Uint8Array(seed.slice(0, 32)) };
+        // Use the full 64-byte seed from BIP39
+        const fullSeed = bip39.mnemonicToSeedSync(mnemonic);
+        // For our purposes, we'll derive a 32-byte seed using SHA-256 of the full seed
+        const derivedSeed = sha256(fullSeed);
+        return { mnemonic, seed: new Uint8Array(derivedSeed) };
     }
 
     // Generate Ed25519 key pair
     async generateEd25519KeyPair(seed) {
         if (seed.length !== 32) throw new Error('Seed must be exactly 32 bytes');
-        const privateKey = seed;
-        const publicKey = await ed25519.getPublicKey(privateKey);
+        
+        // RFC 8032: Ed25519 key generation
+        // 1. Hash the 32-byte seed to get 64 bytes
+        const hash = sha512(seed);
+        
+        // 2. Take the first 32 bytes as the private scalar (clamped)
+        const privateScalar = new Uint8Array(hash.slice(0, 32));
+        
+        // 3. Clamp the private scalar according to Ed25519 spec
+        privateScalar[0] &= 248;  // Clear bottom 3 bits
+        privateScalar[31] &= 127; // Clear top bit
+        privateScalar[31] |= 64;  // Set second highest bit
+        
+        // 4. Generate public key from the clamped private scalar
+        const publicKey = await ed25519.getPublicKey(privateScalar);
+        
         return {
-            privateKey: new Uint8Array(privateKey),
+            privateKey: privateScalar,
             publicKey: new Uint8Array(publicKey),
             keyType: 'Ed25519'
         };
@@ -47,10 +64,31 @@ class ICPWalletGenerator {
     // Generate Secp256k1 key pair
     generateSecp256k1KeyPair(seed) {
         if (seed.length !== 32) throw new Error('Seed must be exactly 32 bytes');
-        const privateKey = seed;
+        
+        // For Secp256k1, ensure the private key is in valid range (1 to n-1)
+        // We use the seed directly but validate it's in the correct range
+        let privateKey = new Uint8Array(seed);
+        
+        // Secp256k1 curve order (n)
+        const n = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141');
+        let keyBigInt = BigInt('0x' + Array.from(privateKey).map(b => b.toString(16).padStart(2, '0')).join(''));
+        
+        // If key is >= n, derive a new key using SHA-256
+        if (keyBigInt >= n || keyBigInt === 0n) {
+            const hash = sha256(privateKey);
+            privateKey = new Uint8Array(hash);
+            keyBigInt = BigInt('0x' + Array.from(privateKey).map(b => b.toString(16).padStart(2, '0')).join(''));
+            
+            // If still invalid, throw error (extremely unlikely)
+            if (keyBigInt >= n || keyBigInt === 0n) {
+                throw new Error('Unable to generate valid secp256k1 private key from seed');
+            }
+        }
+        
         const publicKey = secp256k1.getPublicKey(privateKey, false); // Uncompressed
+        
         return {
-            privateKey: new Uint8Array(privateKey),
+            privateKey: privateKey,
             publicKey: new Uint8Array(publicKey),
             keyType: 'Secp256k1'
         };
@@ -156,10 +194,14 @@ class ICPWalletGenerator {
 
         let seed, mnemonicPhrase = null;
 
+        // Always generate a mnemonic phrase for backup purposes
         // Generate seed based on method
         switch (seedMethod) {
             case 'random':
-                seed = this.generateRandomSeed();
+                // Generate mnemonic first, then derive seed from it
+                const randomMnemonicResult = this.generateMnemonicSeed();
+                seed = randomMnemonicResult.seed;
+                mnemonicPhrase = randomMnemonicResult.mnemonic;
                 break;
             case 'mnemonic':
                 const mnemonicResult = this.generateMnemonicSeed(mnemonic);
@@ -169,6 +211,8 @@ class ICPWalletGenerator {
             case 'custom':
                 if (!customSeed) throw new Error('Custom seed is required');
                 seed = typeof customSeed === 'string' ? this.hexToBytes(customSeed) : new Uint8Array(customSeed);
+                // For custom seeds, generate a mnemonic that would produce a similar seed for backup
+                mnemonicPhrase = this.generateBackupMnemonic(seed);
                 break;
             default:
                 throw new Error('Invalid seed method');
@@ -213,6 +257,13 @@ class ICPWalletGenerator {
         this.stats.generated++;
         this.generatedWallets.push(wallet);
         return wallet;
+    }
+
+    // Generate a backup mnemonic for custom seeds
+    generateBackupMnemonic(seed) {
+        // For custom seeds, we can't recover the original mnemonic
+        // So we generate a warning mnemonic indicating this is a custom seed
+        return `custom seed wallet backup not available use hex seed ${this.bytesToHex(seed).substring(0, 8)}`;
     }
 
     // Generate multiple wallets
