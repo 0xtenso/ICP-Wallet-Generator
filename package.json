@@ -1,35 +1,55 @@
 {
   "name": "icp-wallet-generator",
   "version": "1.0.0",
-  "description": "Internet Computer Protocol (ICP) Wallet Generator - Node.js CLI Tool",
-  "main": "icp-wallet-generator.js",
+  "description": "A comprehensive ICP wallet generator with Internet Identity integration",
+  "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node icp-wallet-generator.js",
-    "test": "node icp-wallet-generator.js"
+    "start": "node src/index.js cli",
+    "dev": "node --watch src/index.js",
+    "test": "node src/test.js",
+    "build": "npm run build:types && npm run build:js",
+    "build:types": "tsc --declaration --emitDeclarationOnly --outDir dist",
+    "build:js": "node build.js",
+    "wallet": "node test-wallet.js",
+    "wallet:quick": "node src/index.js generate",
+    "wallet:batch": "node src/index.js batch 5",
+    "cli": "node src/index.js cli"
   },
-  "bin": {
-    "icp-wallet": "./icp-wallet-generator.js"
-  },
-  "keywords": ["icp", "internet-computer", "wallet", "generator", "blockchain", "dfinity", "nodejs", "crypto", "ed25519", "secp256k1"],
+  "keywords": [
+    "internet-computer",
+    "icp",
+    "wallet",
+    "cryptocurrency",
+    "blockchain",
+    "dfinity",
+    "principal",
+    "identity"
+  ],
   "author": "ICP Wallet Generator",
   "license": "MIT",
   "dependencies": {
-    "@noble/ed25519": "^2.0.0",
-    "@noble/secp256k1": "^2.1.0",
-    "@noble/hashes": "^1.4.0",
-    "crc": "^4.3.2",
-    "bip39": "^3.1.0"
+    "@dfinity/agent": "^2.0.0",
+    "@dfinity/auth-client": "^2.0.0",
+    "@dfinity/candid": "^2.0.0",
+    "@dfinity/identity": "^2.0.0",
+    "@dfinity/identity-secp256k1": "^2.0.0",
+    "@dfinity/ledger-icp": "^2.0.0",
+    "@dfinity/principal": "^2.0.0",
+    "@dfinity/utils": "^2.0.0",
+    "@noble/ed25519": "^2.3.0",
+    "@noble/secp256k1": "^2.3.0",
+    "bip39": "^3.1.0",
+    "chalk": "^5.3.0",
+    "crypto-js": "^4.2.0",
+    "inquirer": "^9.2.11",
+    "qrcode": "^1.5.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "typescript": "^5.2.2"
   },
   "engines": {
-    "node": ">=16.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/0xtenso/icp-wallet-generator.git"
-  },
-  "bugs": {
-    "url": "https://github.com/0xtenso/icp-wallet-generator/issues"
-  },
-  "homepage": "https://github.com/0xtenso/icp-wallet-generator#readme"
-} 
+    "node": ">=18.0.0"
+  }
+}

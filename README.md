@@ -1,206 +1,466 @@
 # ICP Wallet Generator
 
-A comprehensive Node.js tool for generating Internet Computer Protocol (ICP) wallets following the official ICP specifications. This tool generates cryptographic key pairs and derives ICP account identifiers according to the Internet Computer Protocol documentation.
+A comprehensive wallet generator for the Internet Computer Protocol (ICP) with full Internet Identity integration. Generate, restore, and manage ICP wallets with support for both Secp256k1 and Ed25519 cryptographic curves.
 
 ## Features
 
-- Ed25519 and Secp256k1 key pair generation
-- Principal ID derivation from public keys using SHA-224
-- Account ID calculation with CRC32 checksum following ICP specs
-- Subaccount support for multiple accounts per principal
-- Mnemonic phrase support (BIP39 compatible)
-- Multiple seed methods (random, mnemonic, custom)
-- Secure client-side generation - no network communication
-- JSON export functionality
-- Command-line interface
+- Multiple Cryptographic Curves: Support for Secp256k1 and Ed25519
+- BIP39 Mnemonic Generation: Standard 12, 15, 18, 21, or 24-word mnemonics
+- Principal ID Generation: Compatible with ICP's addressing system
+- Account Identifier Support: For ICP ledger transactions
+- Internet Identity Integration: Native ICP authentication
+- Vanity Address Generation: Create custom prefixed principals
+- Batch Generation: Generate multiple wallets efficiently
+- Wallet Restoration: From mnemonic phrases or private keys
+- QR Code Support: Easy wallet sharing
+- Interactive CLI: Beautiful command-line interface
+- Export Formats: JSON, CSV, and minimal formats
+- Comprehensive Testing: Full test suite included
 
 ## Installation
 
-```bash
-# Clone the repository
-git clone <repository-url>
-cd ICP-Wallet-Generator
+### Prerequisites
 
-# Install dependencies
+- Node.js 18.0.0 or higher
+- npm or yarn package manager
+
+### Install Dependencies
+
+```bash
+# Clone or download the project
 npm install
 
-# Make the script executable (optional)
-chmod +x wallet-generator.js
+# Or install globally (after publishing)
+npm install -g icp-wallet-generator
 ```
 
-## Usage
+## Quick Start
 
-### Command Line Usage
+### Command Line Interface
 
 ```bash
-# Run directly with Node.js
-node wallet-generator.js
+# Start interactive CLI
+npm start
 
-# Or if made executable
-./wallet-generator.js
+# Or directly
+node src/index.js cli
 ```
 
 ### Programmatic Usage
 
 ```javascript
-import { ICPWalletGenerator } from './wallet-generator.js';
+import { generateWallet, restoreWallet } from './src/index.js';
+
+// Generate a new wallet
+const wallet = await generateWallet({
+  curve: 'secp256k1',
+  mnemonicLength: 12
+});
+
+console.log('Principal:', wallet.principal.text);
+console.log('Account ID:', wallet.accountIdentifier.text);
+console.log('Mnemonic:', wallet.mnemonic);
+```
+
+## Usage Examples
+
+### 1. Generate Single Wallet
+
+```javascript
+import { ICPWalletGenerator } from './src/wallet-generator.js';
 
 const generator = new ICPWalletGenerator();
 
-// Generate a wallet with default settings (Ed25519, random seed)
-const wallet = await generator.generateWallet();
+// Generate with Secp256k1 curve and 12-word mnemonic
+const wallet = await generator.generateWallet('secp256k1', 12);
 
-// Generate with specific options
-const wallet2 = await generator.generateWallet({
-    keyType: 'Secp256k1',
-    seedMethod: 'mnemonic',
-    mnemonic: 'your twelve word mnemonic phrase here...'
+console.log({
+  mnemonic: wallet.mnemonic,
+  principal: wallet.principal.text,
+  accountId: wallet.accountIdentifier.text,
+  privateKey: wallet.keys.privateKey,
+  publicKey: wallet.keys.publicKey,
+  curve: wallet.keys.curve
 });
-
-// Generate with custom subaccount
-const wallet3 = await generator.generateWallet({
-    keyType: 'Ed25519',
-    subaccount: '0000000000000000000000000000000000000000000000000000000000000001'
-});
-
-// Display wallet information
-generator.displayWallet(wallet);
 ```
 
-### Generation Options
+### 2. Generate Multiple Wallets
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `keyType` | string | `'Ed25519'` | Key algorithm: `'Ed25519'` or `'Secp256k1'` |
-| `seedMethod` | string | `'random'` | Seed generation: `'random'`, `'mnemonic'`, or `'custom'` |
-| `mnemonic` | string | `null` | BIP39 mnemonic phrase (for `seedMethod: 'mnemonic'`) |
-| `customSeed` | string/Uint8Array | `null` | Custom 32-byte seed (for `seedMethod: 'custom'`) |
-| `subaccount` | string/Uint8Array | `null` | 32-byte subaccount identifier |
+```javascript
+const wallets = await generator.generateBatchWallets(5, 'secp256k1', 12);
 
-## Output Format
+wallets.forEach((wallet, i) => {
+  console.log(`Wallet ${i + 1}: ${wallet.principal.text}`);
+});
+```
 
-Each generated wallet contains:
+### 3. Restore Wallet from Mnemonic
+
+```javascript
+const mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+const restoredWallet = await generator.createWalletFromMnemonic(mnemonic, 'secp256k1');
+
+console.log('Restored Principal:', restoredWallet.principal.text);
+```
+
+### 4. Import Wallet from Private Key
+
+```javascript
+const privateKey = "your-private-key-hex";
+const importedWallet = await generator.createWalletFromPrivateKey(privateKey, 'secp256k1');
+
+console.log('Imported Principal:', importedWallet.principal.text);
+```
+
+### 5. Generate Vanity Wallet
+
+```javascript
+// Generate wallet with custom prefix
+const vanityWallet = await generator.generateVanityWallet('abc', 'secp256k1', 10000);
+
+console.log('Vanity Principal:', vanityWallet.principal.text);
+console.log('Attempts Required:', vanityWallet.attemptsRequired);
+```
+
+### 6. Internet Identity Integration
+
+```javascript
+import { InternetIdentityManager } from './src/internet-identity.js';
+
+const ii = new InternetIdentityManager({
+  // For mainnet: 'https://identity.ic0.app'
+  identityProvider: 'http://rdmx6-jaaaa-aaaaa-aaadq-cai.localhost:4943'
+});
+
+// Initialize
+await ii.initialize();
+
+// Check authentication
+const isAuthenticated = await ii.isAuthenticated();
+
+if (!isAuthenticated) {
+  // Login (browser environment only)
+  const result = await ii.login();
+  console.log('Logged in as:', result.principal);
+}
+
+// Get current principal
+const principal = await ii.getCurrentPrincipal();
+console.log('Current Principal:', principal.toString());
+```
+
+## Command Line Usage
+
+### Interactive CLI
+
+```bash
+node src/index.js cli
+```
+
+The CLI provides an interactive menu with the following options:
+
+- Generate New Wallet
+- Generate Multiple Wallets  
+- Restore Wallet from Mnemonic
+- Import Wallet from Private Key
+- Generate Vanity Wallet
+- Internet Identity Demo
+- Validate Address/Mnemonic
+
+### Direct Commands
+
+```bash
+# Generate single wallet
+node src/index.js generate --curve secp256k1 --length 12
+
+# Generate multiple wallets
+node src/index.js batch 5 --curve ed25519 --length 24
+
+# Run examples
+node src/index.js examples
+
+# Show help
+node src/index.js --help
+```
+
+## API Reference
+
+### ICPWalletGenerator
+
+#### `generateWallet(curve, mnemonicLength)`
+
+Generate a new wallet with mnemonic phrase.
+
+- `curve`: `'secp256k1'` | `'ed25519'`
+- `mnemonicLength`: `12` | `15` | `18` | `21` | `24`
+
+Returns: `Promise<WalletObject>`
+
+#### `createWalletFromMnemonic(mnemonic, curve)`
+
+Restore wallet from existing mnemonic phrase.
+
+- `mnemonic`: BIP39 mnemonic phrase string
+- `curve`: Cryptographic curve to use
+
+Returns: `Promise<WalletObject>`
+
+#### `createWalletFromPrivateKey(privateKeyHex, curve)`
+
+Import wallet from private key.
+
+- `privateKeyHex`: Private key in hexadecimal format
+- `curve`: Cryptographic curve to use
+
+Returns: `Promise<WalletObject>`
+
+#### `generateBatchWallets(count, curve, mnemonicLength)`
+
+Generate multiple wallets in batch.
+
+- `count`: Number of wallets to generate
+- `curve`: Cryptographic curve to use  
+- `mnemonicLength`: Mnemonic length
+
+Returns: `Promise<WalletObject[]>`
+
+#### `generateVanityWallet(prefix, curve, maxAttempts)`
+
+Generate wallet with custom principal prefix.
+
+- `prefix`: Desired prefix (2-5 characters)
+- `curve`: Cryptographic curve to use
+- `maxAttempts`: Maximum generation attempts
+
+Returns: `Promise<VanityWalletObject>`
+
+### InternetIdentityManager
+
+#### `initialize()`
+
+Initialize the Internet Identity client.
+
+Returns: `Promise<void>`
+
+#### `login(options)`
+
+Login with Internet Identity (browser only).
+
+- `options`: Login configuration options
+
+Returns: `Promise<AuthResult>`
+
+#### `logout()`
+
+Logout from Internet Identity.
+
+Returns: `Promise<void>`
+
+#### `isAuthenticated()`
+
+Check if user is currently authenticated.
+
+Returns: `Promise<boolean>`
+
+#### `getCurrentPrincipal()`
+
+Get the current user's principal.
+
+Returns: `Promise<Principal|null>`
+
+#### `createActor(canisterId, interfaceFactory, options)`
+
+Create an actor for canister interaction.
+
+- `canisterId`: Target canister ID
+- `interfaceFactory`: Candid interface factory
+- `options`: Additional configuration
+
+Returns: `Promise<Actor>`
+
+## Wallet Object Structure
 
 ```javascript
 {
-    index: 1,
-    keyType: 'Ed25519',
-    seed: {
-        hex: '4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d',
-        mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
-    },
-    privateKey: '4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d',
-    publicKey: 'f25c0fc2e2b9c033ee4b93b5b8da5b807c5b8b6b6b8b8b8b8b8b8b8b8b8b8b8b',
-    principalId: {
-        bytes: 'a1b2c3d4e5f6789abcdef01234567890abcdef01234567890abcdef',
-        text: 'rdmx6-jaaaa-aaaaa-aaadq-cai'
-    },
-    accountId: 'a1b2c3d4e5f6789abcdef01234567890abcdef01234567890abcdef01234567890',
-    subaccount: '0000000000000000000000000000000000000000000000000000000000000000',
-    createdAt: '2025-01-27T10:30:00.000Z'
+  mnemonic: "twelve word mnemonic phrase...",
+  principal: {
+    text: "principal-id-string",
+    bytes: Uint8Array
+  },
+  accountIdentifier: {
+    text: "account-id-hex-string", 
+    bytes: Uint8Array
+  },
+  keys: {
+    privateKey: "private-key-hex",
+    publicKey: "public-key-hex",
+    curve: "secp256k1" | "ed25519"
+  },
+  identity: Identity, // DFINITY Identity object
+  createdAt: "2023-01-01T00:00:00.000Z"
 }
 ```
 
-## Technical Implementation
+## Environment Configuration
 
-### Principal ID Derivation
-
-Following the ICP specification:
-1. DER encode the public key with appropriate OID
-2. Calculate SHA-224 hash of the DER-encoded key
-3. Append 0x02 suffix for self-authenticating principal
-
-```
-principal_id = SHA-224(DER_encoded_public_key) · 0x02
-```
-
-### Account ID Calculation
-
-Following the ICP ledger specification:
-1. Create domain separator: `\x0Aaccount-id`
-2. Concatenate: `domain_separator || principal_id || subaccount`
-3. Calculate SHA-224 hash
-4. Calculate CRC32 checksum of the hash
-5. Combine: `CRC32(hash) || hash`
-
-```
-hash = SHA-224("\x0Aaccount-id" || principal || subaccount)
-account_id = CRC32(hash) || hash
-```
-
-### Key Types Supported
-
-Ed25519 (Recommended)
-- Curve: Ed25519
-- Key size: 32 bytes private, 32 bytes public
-- OID: 1.3.101.112
-
-Secp256k1
-- Curve: secp256k1 (same as Bitcoin)
-- Key size: 32 bytes private, 65 bytes public (uncompressed)
-- OID: 1.2.840.10045.3.1.7
-
-## Security Notes
-
-Important Security Considerations:
-
-1. Private Key Security: Never share or expose private keys publicly
-2. Seed Phrase Security: Store mnemonic phrases securely offline
-3. Client-Side Generation: All keys are generated locally - no network communication
-4. Verify Addresses: Always verify generated addresses before using them
-5. Backup: Keep secure backups of all wallet information
-
-## Dependencies
-
-- `@noble/ed25519` - Ed25519 cryptographic operations
-- `@noble/secp256k1` - Secp256k1 cryptographic operations  
-- `@noble/hashes` - SHA-224 hashing
-- `crc` - CRC32 checksum calculation
-- `bip39` - Mnemonic phrase generation and validation
-
-## Examples
-
-### Generate Multiple Wallets
+### Local Development
 
 ```javascript
-const generator = new ICPWalletGenerator();
-
-// Generate 5 Ed25519 wallets
-for (let i = 0; i < 5; i++) {
-    const wallet = await generator.generateWallet({ keyType: 'Ed25519' });
-    generator.displayWallet(wallet);
-}
-```
-
-### Use Custom Seed
-
-```javascript
-const customSeed = '4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
-const wallet = await generator.generateWallet({
-    keyType: 'Ed25519',
-    seedMethod: 'custom',
-    customSeed: customSeed
+const ii = new InternetIdentityManager({
+  identityProvider: 'http://rdmx6-jaaaa-aaaaa-aaadq-cai.localhost:4943'
 });
 ```
 
-### Generate with Mnemonic
+### Production/Mainnet
 
 ```javascript
-const wallet = await generator.generateWallet({
-    keyType: 'Secp256k1',
-    seedMethod: 'mnemonic',
-    mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+const ii = new InternetIdentityManager({
+  identityProvider: 'https://identity.ic0.app'
 });
 ```
 
 ## Testing
 
+Run the comprehensive test suite:
+
 ```bash
 npm test
+# or
+node src/test.js
 ```
 
-## References
+Tests cover:
+- Wallet generation (both curves)
+- Wallet restoration  
+- Private key import
+- Batch generation
+- Validation functions
+- Export functionality
+- Internet Identity integration
+- Error handling
+- Performance metrics
 
-- [Internet Computer Documentation](https://internetcomputer.org/docs)
-- [ICP Ledger Specification](https://internetcomputer.org/docs/references/ledger)
-- [Internet Identity Specification](https://internetcomputer.org/docs/references/ii-spec)
+## Security Considerations
+
+Important Security Notes:
+
+1. Never share your private keys or mnemonic phrases
+2. Store wallet data securely offline
+3. Use hardware wallets for large amounts
+4. Verify all addresses before sending funds
+5. Keep your recovery phrases in multiple secure locations
+
+### Best Practices
+
+- Generate wallets on offline devices when possible
+- Use strong, unique passwords for encrypted storage
+- Regularly backup your wallet data
+- Test recovery procedures with small amounts first
+- Keep software and dependencies updated
+
+## Integration Examples
+
+### Web Application
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ICP Wallet App</title>
+</head>
+<body>
+    <button id="login">Login with Internet Identity</button>
+    <button id="generate">Generate Wallet</button>
+    
+    <script type="module">
+        import { InternetIdentityManager, ICPWalletGenerator } from './src/index.js';
+        
+        const ii = new InternetIdentityManager();
+        const generator = new ICPWalletGenerator();
+        
+        document.getElementById('login').onclick = async () => {
+            await ii.initialize();
+            const result = await ii.login();
+            console.log('Logged in:', result.principal);
+        };
+        
+        document.getElementById('generate').onclick = async () => {
+            const wallet = await generator.generateWallet('secp256k1', 12);
+            console.log('Generated wallet:', wallet.principal.text);
+        };
+    </script>
+</body>
+</html>
+```
+
+### Node.js Backend
+
+```javascript
+import { ICPWalletGenerator } from './src/wallet-generator.js';
+import express from 'express';
+
+const app = express();
+const generator = new ICPWalletGenerator();
+
+app.post('/generate-wallet', async (req, res) => {
+  try {
+    const { curve = 'secp256k1', length = 12 } = req.body;
+    const wallet = await generator.generateWallet(curve, length);
+    
+    // Never send private keys in production!
+    res.json({
+      principal: wallet.principal.text,
+      accountId: wallet.accountIdentifier.text
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(3000);
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. Module import errors
+   - Ensure you're using Node.js 18+ with ES modules support
+   - Check that `"type": "module"` is in package.json
+
+2. Internet Identity not working
+   - Verify the correct identity provider URL for your environment
+   - Ensure you're running in a browser environment for authentication
+
+3. Invalid mnemonic errors 
+   - Check that the mnemonic has the correct number of words
+   - Verify words are from the BIP39 wordlist
+
+4. Principal validation fails
+   - Ensure the principal string is properly formatted
+   - Check for any extra whitespace or invalid characters
+
+### Getting Help
+
+- Check the [Internet Computer documentation](https://internetcomputer.org/docs)
+- Review the test files for usage examples
+- Open an issue if you find bugs or need features
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality  
+5. Ensure all tests pass
+6. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Acknowledgments
+
+- [DFINITY Foundation](https://dfinity.org/) for the Internet Computer protocol
+- [Internet Computer SDK](https://github.com/dfinity/sdk) for development tools
+- [agent-js](https://github.com/dfinity/agent-js) for ICP interaction libraries
