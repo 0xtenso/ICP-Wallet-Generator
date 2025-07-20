@@ -5,7 +5,6 @@ import { AccountIdentifier } from '@dfinity/ledger-icp';
 import * as bip39 from 'bip39';
 import crypto from 'crypto';
 import * as secp256k1 from '@noble/secp256k1';
-import * as ed25519 from '@noble/ed25519';
 
 export class ICPWalletGenerator {
   constructor() {
